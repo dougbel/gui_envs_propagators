@@ -11,7 +11,7 @@ import open3d as o3d
 
 from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import QFileDialog
-from vtkplotter import Plotter, load, show, Points
+from vtkplotter import Plotter, load, show, Points, Cone
 
 from qt_ui.Ui_propagators_loader import Ui_MainWindow
 from si.scannet.datascannet import DataScanNet
@@ -33,8 +33,13 @@ class View:
         self.ui = Ui_MainWindow()
         self.ui.setupUi(MainWindow)
         self.ui.vtk_widget.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
+        self.ui.vtk_interaction.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
+
         self.vp = Plotter(qtWidget=self.ui.vtk_widget, bg="white")
         self.vp.show([], axes=0)
+
+        vp = Plotter(qtWidget=self.ui.vtk_interaction, bg="white")
+        vp.show([], axes=0)
 
         # ### BUTTON SIGNALS
         self.ui.btn_dataset.clicked.connect(
@@ -52,7 +57,8 @@ class View:
         # DATASET
         self.ui.line_dataset.textChanged.connect(lambda: self.update_list_environments(self.ui.line_dataset.text()))
         self.ui.l_env.itemSelectionChanged.connect(self.update_visualized_environment)
-        self.ui.line_propagators.textChanged.connect(lambda: self.update_list_interactions(self.ui.line_propagators.text()))
+        self.ui.line_propagators.textChanged.connect(
+            lambda: self.update_list_interactions(self.ui.line_propagators.text()))
         self.ui.l_interactions.itemSelectionChanged.connect(self.update_visualized_interaction)
 
         # ### WORKING INDEXES
@@ -177,16 +183,16 @@ class View:
             self.ui.tree_train.header().resizeSection(0, 200)
             self.ui.tree_train.expandAll()
 
-        propagation_model = QJsonModel()
-        self.ui.tree_propagation.setModel(propagation_model)
-        propagation_data_json = os.path.join(path_prop, "propagation_data.json")
-        with open(propagation_data_json) as f:
-            propagation_model.load(json.load(f))
-        self.ui.tree_propagation.header().resizeSection(0, 200)
+            propagation_model = QJsonModel()
+            self.ui.tree_propagation.setModel(propagation_model)
+            propagation_data_json = os.path.join(path_prop, "propagation_data.json")
+            with open(propagation_data_json) as f:
+                propagation_model.load(json.load(f))
+            self.ui.tree_propagation.header().resizeSection(0, 200)
 
-        self.ui.btn_view_interaction.setEnabled(True)
+            self.update_vtk_interaction()
 
-    def click_view_interaction(self):
+    def __iter_meshes_files(self):
         path_prop = os.path.join(self.ui.line_descriptors.text(), self.interactions[self.idx_iter])
 
         ibs_file = os.path.join(path_prop,
@@ -198,6 +204,21 @@ class View:
         obj_file = os.path.join(path_prop,
                                 self.train_data['affordance_name'] + '_' + self.train_data[
                                     'obj_name'] + '_object.ply')
+        return env_file, obj_file, ibs_file
+
+    def update_vtk_interaction(self):
+        env_file, obj_file, ibs_file = self.__iter_meshes_files()
+        vp = Plotter(qtWidget=self.ui.vtk_interaction, bg="white")
+        vp.load(env_file, c=(.7, .7, .7), alpha=.6)
+        vp.load(obj_file, c=(0, 1, 0), alpha=.78)
+        vp.load(ibs_file, c=(0, 0, 1), alpha=.39)
+        vp.show(axes=1)
+
+        self.ui.btn_view_interaction.setEnabled(True)
+
+    def click_view_interaction(self):
+        env_file, obj_file, ibs_file = self.__iter_meshes_files()
+        path_prop = os.path.join(self.ui.line_descriptors.text(), self.interactions[self.idx_iter])
         pv_begin_file = os.path.join(path_prop,
                                      'UNew_' + self.train_data['affordance_name'] + '_' + self.train_data[
                                          'obj_name'] + '_descriptor_8_points.pcd')
@@ -212,9 +233,9 @@ class View:
         pv_end = np.asarray(o3d.io.read_point_cloud(pv_env_file).points)[0:self.train_data['sample_size']]
         pv = trimesh.load_path(np.hstack((pv_begin, pv_begin + pv_end)).reshape(-1, 2, 3))
 
+        tri_mesh_env.visual.face_colors = [200, 200, 200, 150]
         tri_mesh_obj.visual.face_colors = [0, 255, 0, 200]
         tri_mesh_ibs.visual.face_colors = [0, 0, 255, 100]
-        tri_mesh_env.visual.face_colors = [200, 200, 200, 150]
 
         scene = trimesh.Scene([tri_mesh_obj, tri_mesh_env, tri_mesh_ibs, pv])
         scene.show(flags={'cull': False, 'wireframe': False, 'axis': False},
