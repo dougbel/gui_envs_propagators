@@ -215,7 +215,7 @@
      <bool>true</bool>
     </property>
    </widget>
-   <widget class="QCheckBox" name="chk_on_gray">
+   <widget class="QCheckBox" name="chk_on_gray_env">
     <property name="geometry">
      <rect>
       <x>920</x>
@@ -314,7 +314,7 @@
    <zorder>btn_show_samples</zorder>
    <zorder>btn_add_sample</zorder>
    <zorder>chk_on_tested_points</zorder>
-   <zorder>chk_on_gray</zorder>
+   <zorder>chk_on_gray_env</zorder>
   </widget>
   <widget class="QMenuBar" name="menubar">
    <property name="geometry">

@@ -56,7 +56,7 @@ class VisualizerSampler:
     def generate_votes(self):
         sum_mapped_norms = sum(self.np_scores)
         probabilities = [float(score) / sum_mapped_norms for score in self.np_scores]
-        n_rolls = 50 * self.np_scores.shape[0]
+        n_rolls = 10 * self.np_scores.shape[0]
         rolls = np.random.choice(self.np_scores.shape[0], n_rolls, p=probabilities)
         return Counter(rolls).most_common()
 

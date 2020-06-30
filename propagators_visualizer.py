@@ -1,19 +1,18 @@
 import glob
 import os
 import sys
-from collections import Counter
+import gc
 
 import trimesh
 import vtk
 import pickle
 import json
 import numpy as np
-import pandas as pd
 import open3d as o3d
 
 from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import QFileDialog
-from vtkplotter import Plotter, load, show, Points, Cone
+from vtkplotter import Plotter, load, Points
 
 from qt_ui.Ui_propagators_loader import Ui_MainWindow
 from si.scannet.datascannet import DataScanNet
@@ -33,6 +32,7 @@ class View:
 
         app = QtWidgets.QApplication(sys.argv)
         MainWindow = QtWidgets.QMainWindow()
+
         self.ui = Ui_MainWindow()
         self.ui.setupUi(MainWindow)
         self.ui.vtk_widget.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
@@ -40,9 +40,6 @@ class View:
 
         self.vp = Plotter(qtWidget=self.ui.vtk_widget, bg="white")
         self.vp.show([], axes=0)
-
-        # vp = Plotter(qtWidget=self.ui.vtk_interaction, bg="white")
-        # vp.show([], axes=0)
 
         # ### BUTTON SIGNALS
         self.ui.btn_dataset.clicked.connect(
@@ -56,15 +53,15 @@ class View:
         self.ui.btn_show_samples.clicked.connect(self.click_show_samples_on_environment)
 
         # ### check box signal
-        self.ui.chk_on_gray.stateChanged.connect(self.update_color_env)
-        self.ui.chk_on_tested_points.stateChanged.connect(self.update_color_tested_points)
+        self.ui.chk_on_gray_env.stateChanged.connect(self.changed_chk_on_gray_env)
+        self.ui.chk_on_tested_points.stateChanged.connect(self.changed_chk_tested_points)
 
         # ### INFO LOADERS
         # DATASET
         self.ui.line_dataset.textChanged.connect(lambda: self.update_list_environments(self.ui.line_dataset.text()))
+        self.ui.line_propagators.textChanged.connect(lambda: self.update_list_interactions(self.ui.line_propagators.text()))
+        # ITEM SELECTION
         self.ui.l_env.itemSelectionChanged.connect(self.update_visualized_environment)
-        self.ui.line_propagators.textChanged.connect(
-            lambda: self.update_list_interactions(self.ui.line_propagators.text()))
         self.ui.l_interactions.itemSelectionChanged.connect(self.update_visualized_interaction)
 
         # ### WORKING INDEXES
@@ -111,16 +108,15 @@ class View:
             [actors.append(sample) for sample in vtk_samples ]
 
         self.vp.show(*actors, axes=1, resetcam=resetcam)
+        gc.collect()
 
     def __load_env_from_hdd(self):
-        if len(self.ui.l_env.selectedIndexes()) > 0:
-            self.idx_env = self.ui.l_env.selectedIndexes()[0].row()
-            if self.ui.chk_on_gray.isChecked():
-                self.vtk_env = load(self.scannet_data.env_files_decimated[self.idx_env], alpha=1, c=(.4, 0.4, 0.4))
-            else:
-                self.vtk_env = load(self.scannet_data.env_files_decimated[self.idx_env], alpha=1)
+        if self.ui.chk_on_gray_env.isChecked():
+            self.vtk_env = load(self.scannet_data.env_files_decimated[self.idx_env], alpha=1, c=(.4, 0.4, 0.4))
+        else:
+            self.vtk_env = load(self.scannet_data.env_files_decimated[self.idx_env], alpha=1)
 
-    def update_color_env(self):
+    def changed_chk_on_gray_env(self):
         if len(self.ui.l_env.selectedIndexes()) > 0:
             old_camera = self.vp.camera
             self.__load_env_from_hdd()
@@ -129,7 +125,7 @@ class View:
             else:
                 self.update_vtk(vtk_env=self.vtk_env, vtk_points=self.vtk_pc_tested, camera=old_camera)
 
-    def update_color_tested_points(self):
+    def changed_chk_tested_points(self):
         old_camera = self.vp.camera
         self.update_vtk(vtk_env=self.vtk_env,
                         vtk_points=self.vtk_pc_tested,
@@ -137,13 +133,18 @@ class View:
                         camera=old_camera)
 
     def update_visualized_environment(self):
-        self.idx_env = None
+        resetcam = self.idx_env is None
+
         if len(self.ui.l_env.selectedIndexes()) > 0:
-            self.__load_env_from_hdd()
-            if self.idx_iter is None:
-                self.update_vtk(vtk_env=self.vtk_env, resetcam=True)
-            else:
-                self.update_visualized_interaction()
+            self.idx_env = self.ui.l_env.selectedIndexes()[0].row()
+
+            if len(self.ui.l_env.selectedIndexes()) > 0:
+                self.__load_env_from_hdd()
+                if self.idx_iter is None:
+                    self.update_vtk(vtk_env=self.vtk_env, resetcam=True)
+                else:
+                    # self.update_vtk(vtk_env=self.vtk_env, resetcam=resetcam)
+                    self.update_visualized_interaction(resetcam=resetcam)
 
     def update_list_environments(self, path_dataset):
         self.ui.l_env.clear()
@@ -152,7 +153,7 @@ class View:
         for scan in self.scannet_data.scans:
             self.ui.l_env.addItem(scan)
 
-    def update_visualized_interaction(self):
+    def update_visualized_interaction(self, resetcam=False):
         old_camera = self.vp.camera
         self.idx_iter = None
 
@@ -168,7 +169,7 @@ class View:
                 self.vtk_pc_tested = None
 
                 self.ui.chk_on_tested_points.setChecked(True)
-                self.update_vtk(vtk_env=self.vtk_env, camera=old_camera)
+                self.update_vtk(vtk_env=self.vtk_env, camera=old_camera, resetcam=resetcam)
 
                 path_prop = os.path.join(self.ui.line_propagators.text(),
                                          self.interactions[self.idx_iter],
@@ -193,6 +194,7 @@ class View:
                 self.np_scores[self.np_scores > 1] = 1
 
                 self.vtk_pc_tested.cellColors(self.np_scores, cmap='jet_r', vmin=0, vmax=1)
+                self.vtk_pc_tested.addScalarBar(c='jet_r', vmin=0, vmax=1, nlabels=5, pos=(0.8, 0.25))
 
                 self.update_vtk(vtk_env=self.vtk_env, vtk_points=self.vtk_pc_tested, camera=old_camera)
 
@@ -200,7 +202,11 @@ class View:
 
     def update_list_interactions(self, path_propagators):
         self.interactions.clear()
-        self.interactions = os.listdir(path_propagators)
+        tmp = os.listdir(path_propagators)
+        tmp = [item for item in tmp if not item.endswith('_img_segmentation_w224_x_h224')]
+        tmp = [item for item in tmp if not item.endswith('.csv')]
+        tmp = [item for item in tmp if not item.endswith('.log')]
+        self.interactions = tmp
         self.interactions.sort()
         for inter in self.interactions:
             self.ui.l_interactions.addItem(inter)
@@ -304,7 +310,6 @@ class View:
             self.update_vtk(vtk_env=self.vtk_env, vtk_points=self.vtk_pc_tested, vtk_samples=obj_vtk, camera=old_camera)
 
             self.ui.btn_show_samples.setEnabled(True)
-
 
     def json_training_files_with_path(self):
         filepath_json_propagation_data = os.path.join(self.training_path(), "propagation_data.json")
