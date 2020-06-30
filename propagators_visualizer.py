@@ -1,12 +1,14 @@
 import glob
 import os
 import sys
+from collections import Counter
 
 import trimesh
 import vtk
 import pickle
 import json
 import numpy as np
+import pandas as pd
 import open3d as o3d
 
 from PyQt5 import QtWidgets
@@ -16,6 +18,7 @@ from vtkplotter import Plotter, load, show, Points, Cone
 from qt_ui.Ui_propagators_loader import Ui_MainWindow
 from si.scannet.datascannet import DataScanNet
 from thirdparty.QJsonModel.qjsonmodel import QJsonModel
+from visualizer_sampler import VisualizerSampler
 
 
 class View:
@@ -24,7 +27,7 @@ class View:
         self.scannet_data = None
         self.vtk_env = None
         self.vtk_pc_tested = None
-        self.train_data = None
+        self.vtk_samples = None
         self.interactions = []
         self.BATCH_PROPAGATION = 10000
 
@@ -38,8 +41,8 @@ class View:
         self.vp = Plotter(qtWidget=self.ui.vtk_widget, bg="white")
         self.vp.show([], axes=0)
 
-        vp = Plotter(qtWidget=self.ui.vtk_interaction, bg="white")
-        vp.show([], axes=0)
+        # vp = Plotter(qtWidget=self.ui.vtk_interaction, bg="white")
+        # vp.show([], axes=0)
 
         # ### BUTTON SIGNALS
         self.ui.btn_dataset.clicked.connect(
@@ -49,9 +52,12 @@ class View:
         self.ui.btn_descriptors.clicked.connect(
             lambda: self.click_set_dir(MainWindow, self.ui.line_descriptors, "descriptors"))
         self.ui.btn_view_interaction.clicked.connect(self.click_view_interaction)
+        self.ui.btn_add_sample.clicked.connect(self.click_add_sample_on_environment)
+        self.ui.btn_show_samples.clicked.connect(self.click_show_samples_on_environment)
 
         # ### check box signal
         self.ui.chk_on_gray.stateChanged.connect(self.update_color_env)
+        self.ui.chk_on_tested_points.stateChanged.connect(self.update_color_tested_points)
 
         # ### INFO LOADERS
         # DATASET
@@ -64,6 +70,13 @@ class View:
         # ### WORKING INDEXES
         self.idx_env = None
         self.idx_iter = None
+
+        # ### VARIABLES FOR WORKING GLOBALLY ON SELECTIONS
+        self.train_data = None
+        self.propagation_data = None
+        self.np_pc_tested = None
+        self.np_scores = None
+        self.sampler = None
 
         self.defaults()
 
@@ -86,10 +99,17 @@ class View:
         if file_name:
             line.setText(file_name)
 
-    def update_vtk(self, *actors, camera=None, resetcam=False):
+    def update_vtk(self, vtk_env, vtk_points=None, vtk_samples=None, camera=None, resetcam=False):
         self.vp = Plotter(qtWidget=self.ui.vtk_widget, bg="white")
         if camera is not None:
             self.vp.camera = camera
+
+        actors = [vtk_env]
+        if self.ui.chk_on_tested_points.isChecked() and vtk_points is not None:
+            actors.append(vtk_points)
+        if vtk_samples is not None:
+            [actors.append(sample) for sample in vtk_samples ]
+
         self.vp.show(*actors, axes=1, resetcam=resetcam)
 
     def __load_env_from_hdd(self):
@@ -105,16 +125,23 @@ class View:
             old_camera = self.vp.camera
             self.__load_env_from_hdd()
             if self.idx_iter is None:
-                self.update_vtk([self.vtk_env], camera=old_camera)
+                self.update_vtk(vtk_env=self.vtk_env, camera=old_camera)
             else:
-                self.update_vtk([self.vtk_env, self.vtk_pc_tested], camera=old_camera)
+                self.update_vtk(vtk_env=self.vtk_env, vtk_points=self.vtk_pc_tested, camera=old_camera)
+
+    def update_color_tested_points(self):
+        old_camera = self.vp.camera
+        self.update_vtk(vtk_env=self.vtk_env,
+                        vtk_points=self.vtk_pc_tested,
+                        vtk_samples=self.vtk_samples,
+                        camera=old_camera)
 
     def update_visualized_environment(self):
         self.idx_env = None
         if len(self.ui.l_env.selectedIndexes()) > 0:
             self.__load_env_from_hdd()
             if self.idx_iter is None:
-                self.update_vtk([self.vtk_env], resetcam=True)
+                self.update_vtk(vtk_env=self.vtk_env, resetcam=True)
             else:
                 self.update_visualized_interaction()
 
@@ -126,13 +153,22 @@ class View:
             self.ui.l_env.addItem(scan)
 
     def update_visualized_interaction(self):
-        oldcamera = self.vp.camera
+        old_camera = self.vp.camera
         self.idx_iter = None
 
         if len(self.ui.l_interactions.selectedIndexes()) > 0:
             self.idx_iter = self.ui.l_interactions.selectedIndexes()[0].row()
+
             if self.idx_env is not None:
-                self.update_vtk([self.vtk_env], camera=oldcamera)
+                self.train_data = None
+                self.propagation_data = None
+                self.np_pc_tested = None
+                self.np_scores = None
+                self.sampler = None
+                self.vtk_pc_tested = None
+
+                self.ui.chk_on_tested_points.setChecked(True)
+                self.update_vtk(vtk_env=self.vtk_env, camera=old_camera)
 
                 path_prop = os.path.join(self.ui.line_propagators.text(),
                                          self.interactions[self.idx_iter],
@@ -144,18 +180,21 @@ class View:
                 with open(propagator_file, 'rb') as rbf_file:
                     propagator = pickle.load(rbf_file)
 
-                pc_tested_array = np.asarray(o3d.io.read_point_cloud(pc_tested_file).points)
-                self.vtk_pc_tested = Points(pc_tested_array, r=3, alpha=1, c='blue')
+                self.np_pc_tested = np.asarray(o3d.io.read_point_cloud(pc_tested_file).points)
+                self.vtk_pc_tested = Points(self.np_pc_tested, r=3, alpha=1, c='blue')
 
-                np_scores = np.array([])
-                for j in range(0, pc_tested_array.shape[0], self.BATCH_PROPAGATION):
-                    batch = pc_tested_array[j:j + self.BATCH_PROPAGATION]
+                self.np_scores = np.array([])
+                for j in range(0, self.np_pc_tested.shape[0], self.BATCH_PROPAGATION):
+                    batch = self.np_pc_tested[j:j + self.BATCH_PROPAGATION]
                     temp = propagator(batch[:, 0], batch[:, 1], batch[:, 2])
-                    np_scores = np.concatenate((np_scores, temp), axis=0)
+                    self.np_scores = np.concatenate((self.np_scores, temp), axis=0)
 
-                self.vtk_pc_tested.cellColors(np_scores, cmap='jet_r', vmin=0, vmax=1)
+                self.np_scores[self.np_scores < 0] = 0
+                self.np_scores[self.np_scores > 1] = 1
 
-                self.update_vtk([self.vtk_env, self.vtk_pc_tested], camera=oldcamera)
+                self.vtk_pc_tested.cellColors(self.np_scores, cmap='jet_r', vmin=0, vmax=1)
+
+                self.update_vtk(vtk_env=self.vtk_env, vtk_points=self.vtk_pc_tested, camera=old_camera)
 
                 self.update_data()
 
@@ -171,39 +210,38 @@ class View:
         self.ui.tree_train.setModel(train_model)
 
         if self.idx_iter is not None:
-            path_prop = os.path.join(self.ui.line_descriptors.text(), self.interactions[self.idx_iter])
+            json_training_file, json_propagation_file = self.json_training_files_with_path()
 
-            files = glob.glob(os.path.join(path_prop, '*.json'))
-            for json_file in files:
-                if json_file != os.path.join(path_prop, "propagation_data.json"):
-                    with open(json_file) as f:
-                        self.train_data = json.load(f)
-                    train_model.load(self.train_data)
-                    break
+            with open(json_training_file) as f:
+                self.train_data = json.load(f)
+            train_model.load(self.train_data)
+
             self.ui.tree_train.header().resizeSection(0, 200)
             self.ui.tree_train.expandAll()
 
             propagation_model = QJsonModel()
             self.ui.tree_propagation.setModel(propagation_model)
-            propagation_data_json = os.path.join(path_prop, "propagation_data.json")
-            with open(propagation_data_json) as f:
-                propagation_model.load(json.load(f))
+
+            with open(json_propagation_file) as f:
+                self.propagation_data = json.load(f)
+            propagation_model.load(self.propagation_data)
             self.ui.tree_propagation.header().resizeSection(0, 200)
 
             self.update_vtk_interaction()
 
     def __iter_meshes_files(self):
-        path_prop = os.path.join(self.ui.line_descriptors.text(), self.interactions[self.idx_iter])
+        training_path = self.training_path()
 
-        ibs_file = os.path.join(path_prop,
-                                self.train_data['affordance_name'] + '_' + self.train_data[
-                                    'obj_name'] + '_ibs_mesh_segmented.ply')
-        env_file = os.path.join(path_prop,
+        env_file = os.path.join(training_path,
                                 self.train_data['affordance_name'] + '_' + self.train_data[
                                     'obj_name'] + '_environment.ply')
-        obj_file = os.path.join(path_prop,
+        obj_file = os.path.join(training_path,
                                 self.train_data['affordance_name'] + '_' + self.train_data[
                                     'obj_name'] + '_object.ply')
+        ibs_file = os.path.join(training_path,
+                                self.train_data['affordance_name'] + '_' + self.train_data[
+                                    'obj_name'] + '_ibs_mesh_segmented.ply')
+
         return env_file, obj_file, ibs_file
 
     def update_vtk_interaction(self):
@@ -215,14 +253,16 @@ class View:
         vp.show(axes=1)
 
         self.ui.btn_view_interaction.setEnabled(True)
+        self.ui.btn_add_sample.setEnabled(True)
+        self.ui.btn_show_samples.setEnabled(False)
 
     def click_view_interaction(self):
         env_file, obj_file, ibs_file = self.__iter_meshes_files()
-        path_prop = os.path.join(self.ui.line_descriptors.text(), self.interactions[self.idx_iter])
-        pv_begin_file = os.path.join(path_prop,
+        training_path = self.training_path()
+        pv_begin_file = os.path.join(training_path,
                                      'UNew_' + self.train_data['affordance_name'] + '_' + self.train_data[
                                          'obj_name'] + '_descriptor_8_points.pcd')
-        pv_env_file = os.path.join(path_prop,
+        pv_env_file = os.path.join(training_path,
                                    'UNew_' + self.train_data['affordance_name'] + '_' + self.train_data[
                                        'obj_name'] + '_descriptor_8_vectors.pcd')
 
@@ -241,7 +281,45 @@ class View:
         scene.show(flags={'cull': False, 'wireframe': False, 'axis': False},
                    caption=self.train_data['affordance_name'] + ' ' + self.train_data['obj_name'])
 
+    def click_add_sample_on_environment(self):
+        old_camera = self.vp.camera
+
+        if self.idx_env is not None and self.idx_iter is not None:
+            path_prop = os.path.join(self.ui.line_propagators.text(),
+                                     self.interactions[self.idx_iter],
+                                     self.scannet_data.scans[self.idx_env])
+            csv_scores_file = os.path.join(path_prop, "test_scores.csv")
+
+            # path_prop = os.path.join(self.ui.line_descriptors.text(), self.interactions[self.idx_iter])
+            # json_propagation_file = os.path.join(path_prop, "propagation_data.json")
+            __, json_propagation_file = self.json_training_files_with_path()
+
+            if self.sampler is None:
+                __, obj_file, __ = self.__iter_meshes_files()
+                self.sampler = VisualizerSampler(self.np_pc_tested, self.np_scores,
+                                                 csv_scores_file, json_propagation_file, obj_file)
+
+            obj_vtk = [self.sampler.get_sample()]
+
+            self.update_vtk(vtk_env=self.vtk_env, vtk_points=self.vtk_pc_tested, vtk_samples=obj_vtk, camera=old_camera)
+
+            self.ui.btn_show_samples.setEnabled(True)
+
+
+    def json_training_files_with_path(self):
+        filepath_json_propagation_data = os.path.join(self.training_path(), "propagation_data.json")
+        files = glob.glob(os.path.join(self.training_path(), '*.json'))
+        filepath_json_train_data = [json_file for json_file in files if json_file != filepath_json_propagation_data][0]
+        return filepath_json_train_data, filepath_json_propagation_data
+
+    def training_path(self):
+        return os.path.join(self.ui.line_descriptors.text(), self.interactions[self.idx_iter])
+
+    def click_show_samples_on_environment(self):
+        old_camera = self.vp.camera
+
+        self.update_vtk(vtk_env=self.vtk_env, vtk_points=self.vtk_pc_tested, vtk_samples=self.sampler.vtk_samples, camera=old_camera)
+
 
 if __name__ == "__main__":
     v = View()
-    v.show()

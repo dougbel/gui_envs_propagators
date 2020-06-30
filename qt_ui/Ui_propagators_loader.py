@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file '/home/dougbel/Documents/UoB/4th_semestre/01_propagator_visualizer/gui_envs_propagators/qt_ui/propagators_loader.ui'
+# Form implementation generated from reading ui file 'propagators_loader.ui'
 #
 # Created by: PyQt5 UI code generator 5.9.2
 #
@@ -26,7 +26,7 @@ class Ui_MainWindow(object):
         self.label.setTextFormat(QtCore.Qt.RichText)
         self.label.setObjectName("label")
         self.layoutWidget = QtWidgets.QWidget(self.centralwidget)
-        self.layoutWidget.setGeometry(QtCore.QRect(290, 0, 741, 108))
+        self.layoutWidget.setGeometry(QtCore.QRect(30, 0, 871, 108))
         self.layoutWidget.setObjectName("layoutWidget")
         self.gridLayout = QtWidgets.QGridLayout(self.layoutWidget)
         self.gridLayout.setContentsMargins(0, 0, 0, 0)
@@ -52,6 +52,7 @@ class Ui_MainWindow(object):
         self.btn_propagator.setObjectName("btn_propagator")
         self.gridLayout.addWidget(self.btn_propagator, 1, 2, 1, 1)
         self.line_descriptors = QtWidgets.QLineEdit(self.layoutWidget)
+        self.line_descriptors.setText("")
         self.line_descriptors.setObjectName("line_descriptors")
         self.gridLayout.addWidget(self.line_descriptors, 2, 1, 1, 1)
         self.btn_descriptors = QtWidgets.QPushButton(self.layoutWidget)
@@ -70,7 +71,7 @@ class Ui_MainWindow(object):
         self.l_interactions.setObjectName("l_interactions")
         self.btn_view_interaction = QtWidgets.QPushButton(self.centralwidget)
         self.btn_view_interaction.setEnabled(False)
-        self.btn_view_interaction.setGeometry(QtCore.QRect(1430, 260, 31, 22))
+        self.btn_view_interaction.setGeometry(QtCore.QRect(1410, 250, 41, 22))
         self.btn_view_interaction.setObjectName("btn_view_interaction")
         self.tree_train = QtWidgets.QTreeView(self.centralwidget)
         self.tree_train.setGeometry(QtCore.QRect(1110, 300, 351, 401))
@@ -87,12 +88,27 @@ class Ui_MainWindow(object):
         self.tree_propagation.setItemsExpandable(True)
         self.tree_propagation.setObjectName("tree_propagation")
         self.chk_on_gray = QtWidgets.QCheckBox(self.centralwidget)
-        self.chk_on_gray.setGeometry(QtCore.QRect(924, 120, 181, 20))
+        self.chk_on_gray.setGeometry(QtCore.QRect(920, 10, 181, 20))
         self.chk_on_gray.setObjectName("chk_on_gray")
         self.vtk_interaction = QVTKRenderWindowInteractor(self.centralwidget)
         self.vtk_interaction.setEnabled(True)
         self.vtk_interaction.setGeometry(QtCore.QRect(1110, 0, 351, 281))
         self.vtk_interaction.setObjectName("vtk_interaction")
+        self.btn_add_sample = QtWidgets.QPushButton(self.centralwidget)
+        self.btn_add_sample.setEnabled(False)
+        self.btn_add_sample.setGeometry(QtCore.QRect(1000, 760, 91, 22))
+        self.btn_add_sample.setFocusPolicy(QtCore.Qt.WheelFocus)
+        self.btn_add_sample.setObjectName("btn_add_sample")
+        self.btn_show_samples = QtWidgets.QPushButton(self.centralwidget)
+        self.btn_show_samples.setEnabled(False)
+        self.btn_show_samples.setGeometry(QtCore.QRect(1000, 790, 91, 23))
+        self.btn_show_samples.setObjectName("btn_show_samples")
+        self.chk_on_tested_points = QtWidgets.QCheckBox(self.centralwidget)
+        self.chk_on_tested_points.setGeometry(QtCore.QRect(920, 40, 181, 20))
+        self.chk_on_tested_points.setIconSize(QtCore.QSize(16, 27))
+        self.chk_on_tested_points.setChecked(True)
+        self.chk_on_tested_points.setAutoRepeatDelay(300)
+        self.chk_on_tested_points.setObjectName("chk_on_tested_points")
         self.vtk_interaction.raise_()
         self.vtk_widget.raise_()
         self.l_env.raise_()
@@ -103,10 +119,13 @@ class Ui_MainWindow(object):
         self.btn_view_interaction.raise_()
         self.tree_train.raise_()
         self.tree_propagation.raise_()
+        self.btn_show_samples.raise_()
+        self.btn_add_sample.raise_()
+        self.chk_on_tested_points.raise_()
         self.chk_on_gray.raise_()
         MainWindow.setCentralWidget(self.centralwidget)
         self.menubar = QtWidgets.QMenuBar(MainWindow)
-        self.menubar.setGeometry(QtCore.QRect(0, 0, 1477, 19))
+        self.menubar.setGeometry(QtCore.QRect(0, 0, 1477, 20))
         self.menubar.setObjectName("menubar")
         MainWindow.setMenuBar(self.menubar)
         self.statusbar = QtWidgets.QStatusBar(MainWindow)
@@ -127,7 +146,20 @@ class Ui_MainWindow(object):
         self.btn_descriptors.setText(_translate("MainWindow", "..."))
         self.label_5.setText(_translate("MainWindow", "<html><head/><body><p><span style=\" font-weight:600;\">Descriptors</span></p></body></html>"))
         self.label_6.setText(_translate("MainWindow", "<html><head/><body><p><span style=\" font-weight:600;\">Interactions:</span></p></body></html>"))
-        self.btn_view_interaction.setText(_translate("MainWindow", "+"))
+        self.btn_view_interaction.setText(_translate("MainWindow", "Zoom"))
         self.chk_on_gray.setText(_translate("MainWindow", "environment in gray color"))
+        self.btn_add_sample.setText(_translate("MainWindow", "Add sample"))
+        self.btn_show_samples.setText(_translate("MainWindow", "Show samples"))
+        self.chk_on_tested_points.setText(_translate("MainWindow", "tested points"))
 
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
+
+if __name__ == "__main__":
+    import sys
+    app = QtWidgets.QApplication(sys.argv)
+    MainWindow = QtWidgets.QMainWindow()
+    ui = Ui_MainWindow()
+    ui.setupUi(MainWindow)
+    MainWindow.show()
+    sys.exit(app.exec_())
+

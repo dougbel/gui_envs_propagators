@@ -56,9 +56,9 @@
    <widget class="QWidget" name="layoutWidget">
     <property name="geometry">
      <rect>
-      <x>290</x>
+      <x>30</x>
       <y>0</y>
-      <width>741</width>
+      <width>871</width>
       <height>108</height>
      </rect>
     </property>
@@ -104,7 +104,11 @@
       </widget>
      </item>
      <item row="2" column="1">
-      <widget class="QLineEdit" name="line_descriptors"/>
+      <widget class="QLineEdit" name="line_descriptors">
+       <property name="text">
+        <string/>
+       </property>
+      </widget>
      </item>
      <item row="2" column="2">
       <widget class="QPushButton" name="btn_descriptors">
@@ -157,14 +161,14 @@
     </property>
     <property name="geometry">
      <rect>
-      <x>1430</x>
-      <y>260</y>
-      <width>31</width>
+      <x>1410</x>
+      <y>250</y>
+      <width>41</width>
       <height>22</height>
      </rect>
     </property>
     <property name="text">
-     <string>+</string>
+     <string>Zoom</string>
     </property>
    </widget>
    <widget class="QTreeView" name="tree_train">
@@ -214,8 +218,8 @@
    <widget class="QCheckBox" name="chk_on_gray">
     <property name="geometry">
      <rect>
-      <x>924</x>
-      <y>120</y>
+      <x>920</x>
+      <y>10</y>
       <width>181</width>
       <height>20</height>
      </rect>
@@ -237,6 +241,66 @@
      </rect>
     </property>
    </widget>
+   <widget class="QPushButton" name="btn_add_sample">
+    <property name="enabled">
+     <bool>false</bool>
+    </property>
+    <property name="geometry">
+     <rect>
+      <x>1000</x>
+      <y>760</y>
+      <width>91</width>
+      <height>22</height>
+     </rect>
+    </property>
+    <property name="focusPolicy">
+     <enum>Qt::WheelFocus</enum>
+    </property>
+    <property name="text">
+     <string>Add sample</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="btn_show_samples">
+    <property name="enabled">
+     <bool>false</bool>
+    </property>
+    <property name="geometry">
+     <rect>
+      <x>1000</x>
+      <y>790</y>
+      <width>91</width>
+      <height>23</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Show samples</string>
+    </property>
+   </widget>
+   <widget class="QCheckBox" name="chk_on_tested_points">
+    <property name="geometry">
+     <rect>
+      <x>920</x>
+      <y>40</y>
+      <width>181</width>
+      <height>20</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>tested points</string>
+    </property>
+    <property name="iconSize">
+     <size>
+      <width>16</width>
+      <height>27</height>
+     </size>
+    </property>
+    <property name="checked">
+     <bool>true</bool>
+    </property>
+    <property name="autoRepeatDelay">
+     <number>300</number>
+    </property>
+   </widget>
    <zorder>vtk_interaction</zorder>
    <zorder>vtk_widget</zorder>
    <zorder>l_env</zorder>
@@ -247,6 +311,9 @@
    <zorder>btn_view_interaction</zorder>
    <zorder>tree_train</zorder>
    <zorder>tree_propagation</zorder>
+   <zorder>btn_show_samples</zorder>
+   <zorder>btn_add_sample</zorder>
+   <zorder>chk_on_tested_points</zorder>
    <zorder>chk_on_gray</zorder>
   </widget>
   <widget class="QMenuBar" name="menubar">
@@ -255,7 +322,7 @@
      <x>0</x>
      <y>0</y>
      <width>1477</width>
-     <height>19</height>
+     <height>20</height>
     </rect>
    </property>
   </widget>
