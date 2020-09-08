@@ -8,7 +8,7 @@ import sys
 from PyQt5 import Qt
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 
-from vtkplotter import Plotter, Cube, Torus, Cone
+from vedo import Plotter, Cube, Torus, Cone
 
 
 class MainWindow(Qt.QMainWindow):

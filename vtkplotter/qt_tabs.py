@@ -1,9 +1,10 @@
 from PyQt5 import QtWidgets
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
-from vtkplotter import load, datadir, Plotter
+from vedo import load, datadir, Plotter
 
-from qt_tabs_ui import Ui_MainWindow
 import vtk
+
+from vtkplotter.qt_tabs_ui import Ui_MainWindow
 
 
 class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
