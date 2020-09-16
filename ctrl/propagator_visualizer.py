@@ -111,10 +111,9 @@ class CtrlPropagatorVisualizer:
         gc.collect()
 
     def __load_env_from_hdd(self):
+        self.vtk_env = load(self.scannet_data.env_files_decimated[self.idx_env])
         if self.ui.chk_on_gray_env.isChecked():
-            self.vtk_env = load(self.scannet_data.env_files_decimated[self.idx_env], alpha=1, c=(.4, 0.4, 0.4))
-        else:
-            self.vtk_env = load(self.scannet_data.env_files_decimated[self.idx_env], alpha=1)
+            self.vtk_env.c((.4, 0.4, 0.4))
 
     def changed_chk_on_gray_env(self):
         if len(self.ui.l_env.selectedIndexes()) > 0:
@@ -194,7 +193,7 @@ class CtrlPropagatorVisualizer:
                 self.np_scores[self.np_scores > 1] = 1
 
                 self.vtk_pc_tested.cellColors(self.np_scores, cmap='jet_r', vmin=0, vmax=1)
-                self.vtk_pc_tested.addScalarBar(c='jet_r', vmin=0, vmax=1, nlabels=5, pos=(0.8, 0.25))
+                self.vtk_pc_tested.addScalarBar(c='jet_r', nlabels=5, pos=(0.8, 0.25))
 
                 self.update_vtk(vtk_env=self.vtk_env, vtk_points=self.vtk_pc_tested, camera=old_camera)
 
@@ -253,9 +252,9 @@ class CtrlPropagatorVisualizer:
     def update_vtk_interaction(self):
         env_file, obj_file, ibs_file = self.__iter_meshes_files()
         vp = Plotter(qtWidget=self.ui.vtk_interaction, bg="white")
-        vp.load(env_file, c=(.7, .7, .7), alpha=.6)
-        vp.load(obj_file, c=(0, 1, 0), alpha=.78)
-        vp.load(ibs_file, c=(0, 0, 1), alpha=.39)
+        vp.load(env_file).c((.7, .7, .7)).alpha(.6)
+        vp.load(obj_file).c((0, 1, 0)).alpha(.78)
+        vp.load(ibs_file).c((0, 0, 1)).alpha(.39)
         vp.show(axes=1)
 
         self.ui.btn_view_interaction.setEnabled(True)
