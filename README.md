@@ -1,4 +1,4 @@
-# **gui_envs_propagators**
+# **Propagators visualizer**
 
 Visualizer of scores propagations
 
@@ -6,3 +6,10 @@ Visualizer of scores propagations
 
 
 If you need to chang the interface, then use as references [this page](./qt_ui/README.md)  
+
+
+
+
+# **PointCloud/mesh visualizer**
+This is still on development
+ ![Interface](./docs/imgs/pc_visualizer.png)

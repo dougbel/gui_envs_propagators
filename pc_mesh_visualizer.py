@@ -17,7 +17,6 @@ from vedo import Plotter, load, Points
 
 from ctrl.pc_mesh_visualizer import CtrlPcMeshVisualizer
 from qt_ui.Ui_pointcloud_mesh_loader import Ui_viewerWindow
-from si.scannet.datascannet import DataScanNet
 from thirdparty.QJsonModel.qjsonmodel import QJsonModel
 
 if __name__ == "__main__":

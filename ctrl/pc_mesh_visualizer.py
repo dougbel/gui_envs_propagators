@@ -7,6 +7,7 @@ import vtk
 import numpy as np
 from PyQt5 import QtWidgets
 from PyQt5 import Qt
+from PyQt5.QtWidgets import QMessageBox
 from qtconsole.qt import QtGui, QtCore
 from vedo import Plotter, Points
 from vedo.colors import colors
@@ -77,6 +78,14 @@ class CtrlPcMeshVisualizer:
             self.ui.table_cloud.setItem(row_position, 0, QtGui.QTableWidgetItem(""))
             self.ui.table_cloud.item(row_position, 0).setBackground(QtGui.QColor(colour_rgb[0], colour_rgb[1], colour_rgb[2]))
             self.ui.table_cloud.setItem(row_position, 1, QtGui.QTableWidgetItem("..."+file_path[-50:]))
+        else:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("Extension "+ ext +" no supported")
+            msg.setWindowTitle("MessageBox demo")
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec()
+
         self.update_vtk()
 
     def update_vtk(self):
