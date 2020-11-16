@@ -386,12 +386,14 @@ class CtrlPropagatorSampler:
 
         max_score = propagation_data['max_limit_score']
         max_missing = propagation_data['max_limit_missing']
+        max_collided = propagation_data['max_limit_cv_collided']
 
         pd_scores = pd.read_csv(self.csv_file_scores)
 
         filtered_df = pd_scores.loc[(pd_scores.score.notnull()) &  # avoiding null scores (bar normal environment)
                                     (pd_scores.missings <= max_missing) &  # avoiding scores with more than max missing
-                                    (pd_scores.score <= max_score),
+                                    (pd_scores.score <= max_score) &
+                                    (pd_scores.cv_collided <= max_collided),
                                     pd_scores.columns != 'interaction']  # returning all columns but interaction name
 
         return filtered_df.loc[filtered_df.groupby(['point_x', 'point_y', 'point_z'])['score'].idxmin()]
