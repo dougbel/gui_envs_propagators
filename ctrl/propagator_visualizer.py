@@ -4,16 +4,22 @@ import json
 import os
 import pickle
 import sys
+import re
+
 from collections import Counter
+from pathlib import Path
 
 import numpy as np
 import open3d as o3d
 import pandas as pd
 import trimesh
 import vtk
+
 from PyQt5 import QtWidgets
+from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QFileDialog
-from vedo import Plotter, load, Points
+from vedo import Plotter, load, Points, Lines, trimesh2vtk, Spheres
+from vedo.utils import flatten
 
 from qt_ui.Ui_propagators_loader import Ui_MainWindow
 from si.scannet.datascannet import DataScanNet
@@ -28,6 +34,7 @@ class CtrlPropagatorVisualizer:
         self.vtk_pc_tested = None
         self.vtk_samples = None
         self.interactions = []
+        self.affordances = []
         self.BATCH_PROPAGATION = 10000
 
         app = QtWidgets.QApplication(sys.argv)
@@ -40,15 +47,18 @@ class CtrlPropagatorVisualizer:
 
         self.vp = Plotter(qtWidget=self.ui.vtk_widget, bg="white")
         self.vp.show([], axes=0)
+        vp = Plotter(qtWidget=self.ui.vtk_interaction, bg="white")
+        vp.show([], axes=0)
+        self.ui.lbl_results.setHidden(True)
 
         # ### BUTTON SIGNALS
         self.ui.btn_dataset.clicked.connect(
             lambda: self.click_set_dir(MainWindow, self.ui.line_dataset, "dataset"))
-        self.ui.btn_propagator.clicked.connect(
-            lambda: self.click_set_dir(MainWindow, self.ui.line_propagators, "propagators"))
-        self.ui.btn_descriptors.clicked.connect(
-            lambda: self.click_set_dir(MainWindow, self.ui.line_descriptors, "descriptors"))
-        self.ui.btn_view_interaction.clicked.connect(self.click_view_interaction)
+        self.ui.btn_results.clicked.connect(
+            lambda: self.click_set_dir(MainWindow, self.ui.line_results, "results"))
+        self.ui.btn_configurations.clicked.connect(
+            lambda: self.click_set_dir(MainWindow, self.ui.line_configurations, "configurations"))
+        # self.ui.btn_view_interaction.clicked.connect(self.click_view_interaction)
         self.ui.btn_add_sample.clicked.connect(self.click_add_sample_on_environment)
         self.ui.btn_show_samples.clicked.connect(self.click_show_samples_on_environment)
 
@@ -59,7 +69,7 @@ class CtrlPropagatorVisualizer:
         # ### INFO LOADERS
         # DATASET
         self.ui.line_dataset.textChanged.connect(lambda: self.update_list_environments(self.ui.line_dataset.text()))
-        self.ui.line_propagators.textChanged.connect(lambda: self.update_list_interactions(self.ui.line_propagators.text()))
+        self.ui.line_configurations.textChanged.connect(lambda: self.update_list_interactions())
         # ITEM SELECTION
         self.ui.l_env.itemSelectionChanged.connect(self.update_visualized_environment)
         self.ui.l_interactions.itemSelectionChanged.connect(self.update_visualized_interaction)
@@ -81,15 +91,15 @@ class CtrlPropagatorVisualizer:
         sys.exit(app.exec_())
 
     def defaults(self):
-        default_dataset = './data/dataset'
+        default_dataset = './data/scans'
         if os.path.exists(default_dataset):
             self.ui.line_dataset.setText(os.path.abspath(default_dataset))
-        default_propagators = './data/propagators'
-        if os.path.exists(default_propagators):
-            self.ui.line_propagators.setText(os.path.abspath(default_propagators))
-        default_descriptors = './data/descriptors_repository'
-        if os.path.exists(default_descriptors):
-            self.ui.line_descriptors.setText(os.path.abspath(default_descriptors))
+        default_results = './data/train'
+        if os.path.exists(default_results):
+            self.ui.line_results.setText(os.path.abspath(default_results))
+        default_configurations = './data/configs_exe'
+        if os.path.exists(default_configurations):
+            self.ui.line_configurations.setText(os.path.abspath(default_configurations))
 
     def click_set_dir(self, window, line, element):
         file_name = str(QFileDialog.getExistingDirectory(window, "Select " + element + " directory"))
@@ -105,7 +115,7 @@ class CtrlPropagatorVisualizer:
         if self.ui.chk_on_tested_points.isChecked() and vtk_points is not None:
             actors.append(vtk_points)
         if vtk_samples is not None:
-            [actors.append(sample) for sample in vtk_samples ]
+            [actors.append(sample) for sample in vtk_samples]
 
         self.vp.show(*actors, axes=1, resetcam=resetcam)
         gc.collect()
@@ -137,13 +147,42 @@ class CtrlPropagatorVisualizer:
         if len(self.ui.l_env.selectedIndexes()) > 0:
             self.idx_env = self.ui.l_env.selectedIndexes()[0].row()
 
-            if len(self.ui.l_env.selectedIndexes()) > 0:
-                self.__load_env_from_hdd()
-                if self.idx_iter is None:
-                    self.update_vtk(vtk_env=self.vtk_env, resetcam=True)
+            self.__load_env_from_hdd()
+
+            scan = self.scannet_data.scans[self.idx_env]
+            self.color_interaction_propagated_in_env(scan)
+
+            if self.idx_iter is None:
+                self.update_vtk(vtk_env=self.vtk_env, resetcam=True)
+            else:
+                # self.update_vtk(vtk_env=self.vtk_env, resetcam=resetcam)
+                self.update_visualized_interaction(resetcam=resetcam)
+
+    def color_interaction_propagated_in_env(self, scan):
+        if scan is not None:
+            path_results = self.ui.line_results.text()
+            tested = []
+            dir_tested = os.path.join(path_results, "env_test", scan)
+            if os.path.exists(dir_tested):
+                tested = os.listdir(dir_tested)
+
+            calc_prop = []
+            dir_calc_prop = os.path.join(path_results, "propagators", scan)
+            if os.path.exists(dir_calc_prop):
+                calc_prop = os.listdir(dir_calc_prop)
+
+            propagated = []
+            dir_propagated = os.path.join(path_results, "frame_propagation", scan)
+            if os.path.exists(dir_propagated):
+                propagated = os.listdir(dir_propagated)
+                propagated = [re.sub('_img_segmentation_w[0-9]+_x_h[0-9]+$', '', i) for i in propagated]
+
+            for i in range(self.ui.l_interactions.count()):
+                affordance = self.affordances[i]
+                if affordance in tested and affordance in calc_prop and affordance in propagated:
+                    self.ui.l_interactions.item(i).setForeground(Qt.black)
                 else:
-                    # self.update_vtk(vtk_env=self.vtk_env, resetcam=resetcam)
-                    self.update_visualized_interaction(resetcam=resetcam)
+                    self.ui.l_interactions.item(i).setForeground(Qt.red)
 
     def update_list_environments(self, path_dataset):
         self.ui.l_env.clear()
@@ -170,20 +209,16 @@ class CtrlPropagatorVisualizer:
                 self.ui.chk_on_tested_points.setChecked(True)
                 self.update_vtk(vtk_env=self.vtk_env, camera=old_camera, resetcam=resetcam)
 
-                path_prop = os.path.join(self.ui.line_propagators.text(),
-                                         self.interactions[self.idx_iter],
-                                         self.scannet_data.scans[self.idx_env])
-
-                propagator_file = os.path.join(path_prop, "propagation_rbf.pkl")
-                pc_tested_file = os.path.join(path_prop, "test_tested_points.pcd")
-
+                propagator_file = self.propagator_file()
                 with open(propagator_file, 'rb') as rbf_file:
                     propagator = pickle.load(rbf_file)
 
-                self.np_pc_tested = np.asarray(o3d.io.read_point_cloud(pc_tested_file).points)
+                npy_samples_file = self.samples_file()
+
+                self.np_pc_tested = np.load(npy_samples_file)
                 self.vtk_pc_tested = Points(self.np_pc_tested, r=3, alpha=1, c='blue')
 
-                self.np_scores = np.array([])
+                self.np_scores = np.array([])  # TODO it is already calculated, then use it!!!
                 for j in range(0, self.np_pc_tested.shape[0], self.BATCH_PROPAGATION):
                     batch = self.np_pc_tested[j:j + self.BATCH_PROPAGATION]
                     temp = propagator(batch[:, 0], batch[:, 1], batch[:, 2])
@@ -199,25 +234,24 @@ class CtrlPropagatorVisualizer:
 
                 self.update_data()
 
-    def update_list_interactions(self, path_propagators):
+    def update_list_interactions(self, scan=None):
         self.interactions.clear()
-        tmp = os.listdir(path_propagators)
-        tmp = [item for item in tmp if not item.endswith('_img_segmentation_w224_x_h224')]
-        tmp = [item for item in tmp if not item.endswith('.csv')]
-        tmp = [item for item in tmp if not item.endswith('.log')]
-        self.interactions = tmp
-        self.interactions.sort()
-        for inter in self.interactions:
-            self.ui.l_interactions.addItem(inter)
+        path_configurations = self.ui.line_configurations.text()
+        path_descriptors = os.path.join(path_configurations, "descriptor_repository")
+        if os.path.exists(path_descriptors):
+            self.interactions = os.listdir(path_descriptors)
+            self.interactions.sort()
+            for inter in self.interactions:
+                self.ui.l_interactions.addItem(inter)
+                self.affordances.append([Path(aff).stem for aff in os.listdir(os.path.join(path_descriptors, inter)) if
+                                         aff.endswith('.json')][0])
 
     def update_data(self):
         train_model = QJsonModel()
         self.ui.tree_train.setModel(train_model)
 
         if self.idx_iter is not None:
-            json_training_file, json_propagation_file = self.json_training_files_with_path()
-
-            with open(json_training_file) as f:
+            with open(self.json_training_file()) as f:
                 self.train_data = json.load(f)
             train_model.load(self.train_data)
 
@@ -227,7 +261,7 @@ class CtrlPropagatorVisualizer:
             propagation_model = QJsonModel()
             self.ui.tree_propagation.setModel(propagation_model)
 
-            with open(json_propagation_file) as f:
+            with open(self.json_propagation_file()) as f:
                 self.propagation_data = json.load(f)
             propagation_model.load(self.propagation_data)
             self.ui.tree_propagation.header().resizeSection(0, 200)
@@ -255,49 +289,44 @@ class CtrlPropagatorVisualizer:
         vp.load(env_file).c((.7, .7, .7)).alpha(.6)
         vp.load(obj_file).c((0, 1, 0)).alpha(.78)
         vp.load(ibs_file).c((0, 0, 1)).alpha(.39)
+        training_path = self.training_path()
+        aff = self.train_data['affordance_name']
+        obj_name = self.train_data['obj_name']
+        # provenance vectors
+        pv_sample_size = self.train_data["trainer"]["sampler"]["sample_size"]
+        pv_pnt_file = os.path.join(training_path, 'UNew_' + aff + '_' + obj_name + '_descriptor_8_points.pcd')
+        pv_vec_file = os.path.join(training_path, 'UNew_' + aff + '_' + obj_name + '_descriptor_8_vectors.pcd')
+        pv_points = np.asarray(o3d.io.read_point_cloud(pv_pnt_file).points)[0:pv_sample_size]
+        pv_vectors = np.asarray(o3d.io.read_point_cloud(pv_vec_file).points)[0:pv_sample_size]
+        provenance_vectors = Lines(pv_points, pv_points + pv_vectors, c='red', alpha=1).lighting("plastic")
+        vp += provenance_vectors
+        # clearance vectors
+        cv_sample_size = self.train_data["trainer"]["cv_sampler"]["sample_clearance_size"]
+        cv_pnt_file = os.path.join(training_path, 'UNew_' + aff + '_' + obj_name + '_descriptor_8_clearance_points.pcd')
+        cv_vct_file = os.path.join(training_path, 'UNew_' + aff + '_' + obj_name + '_descriptor_8_clearance_vectors.pcd')
+        cv_points = np.asarray(o3d.io.read_point_cloud(cv_pnt_file).points)[0:cv_sample_size]
+        cv_vectors = np.asarray(o3d.io.read_point_cloud(cv_vct_file).points)[0:cv_sample_size]
+        clearance_vectors = Lines(cv_points, cv_points + cv_vectors, c='yellow', alpha=1).lighting("plastic")
+        cv_from = Spheres(cv_points, r=.003, c="yellow", alpha=1).lighting("plastic")
+        vp += clearance_vectors
+        vp += cv_from
+
         vp.show(axes=1)
 
-        self.ui.btn_view_interaction.setEnabled(True)
         self.ui.btn_add_sample.setEnabled(True)
         self.ui.btn_show_samples.setEnabled(False)
-
-    def click_view_interaction(self):
-        env_file, obj_file, ibs_file = self.__iter_meshes_files()
-        training_path = self.training_path()
-        pv_begin_file = os.path.join(training_path,
-                                     'UNew_' + self.train_data['affordance_name'] + '_' + self.train_data[
-                                         'obj_name'] + '_descriptor_8_points.pcd')
-        pv_env_file = os.path.join(training_path,
-                                   'UNew_' + self.train_data['affordance_name'] + '_' + self.train_data[
-                                       'obj_name'] + '_descriptor_8_vectors.pcd')
-
-        tri_mesh_env = trimesh.load_mesh(env_file)
-        tri_mesh_obj = trimesh.load_mesh(obj_file)
-        tri_mesh_ibs = trimesh.load_mesh(ibs_file)
-        pv_begin = np.asarray(o3d.io.read_point_cloud(pv_begin_file).points)[0:self.train_data['sample_size']]
-        pv_end = np.asarray(o3d.io.read_point_cloud(pv_env_file).points)[0:self.train_data['sample_size']]
-        pv = trimesh.load_path(np.hstack((pv_begin, pv_begin + pv_end)).reshape(-1, 2, 3))
-
-        tri_mesh_env.visual.face_colors = [200, 200, 200, 150]
-        tri_mesh_obj.visual.face_colors = [0, 255, 0, 200]
-        tri_mesh_ibs.visual.face_colors = [0, 0, 255, 100]
-
-        scene = trimesh.Scene([tri_mesh_obj, tri_mesh_env, tri_mesh_ibs, pv])
-        scene.show(flags={'cull': False, 'wireframe': False, 'axis': False},
-                   caption=self.train_data['affordance_name'] + ' ' + self.train_data['obj_name'])
 
     def click_add_sample_on_environment(self):
         old_camera = self.vp.camera
 
         if self.idx_env is not None and self.idx_iter is not None:
-            path_prop = os.path.join(self.ui.line_propagators.text(),
-                                     self.interactions[self.idx_iter],
-                                     self.scannet_data.scans[self.idx_env])
+            path_prop = os.path.join(self.ui.line_results.text(),
+                                     "env_test",
+                                     self.scannet_data.scans[self.idx_env],
+                                     self.affordances[self.idx_iter])
             csv_scores_file = os.path.join(path_prop, "test_scores.csv")
 
-            # path_prop = os.path.join(self.ui.line_descriptors.text(), self.interactions[self.idx_iter])
-            # json_propagation_file = os.path.join(path_prop, "propagation_data.json")
-            __, json_propagation_file = self.json_training_files_with_path()
+            json_propagation_file = self.json_propagation_file()
 
             if self.sampler is None:
                 __, obj_file, __ = self.__iter_meshes_files()
@@ -310,19 +339,32 @@ class CtrlPropagatorVisualizer:
 
             self.ui.btn_show_samples.setEnabled(True)
 
-    def json_training_files_with_path(self):
-        filepath_json_propagation_data = os.path.join(self.training_path(), "propagation_data.json")
-        files = glob.glob(os.path.join(self.training_path(), '*.json'))
-        filepath_json_train_data = [json_file for json_file in files if json_file != filepath_json_propagation_data][0]
-        return filepath_json_train_data, filepath_json_propagation_data
+    def json_propagation_file(self):
+        conf_prop_dir = os.path.join(self.ui.line_configurations.text(), "json_propagators",
+                                     self.affordances[self.idx_iter])
+        return os.path.join(conf_prop_dir, "propagation_data.json")
+
+    def json_training_file(self):
+        return os.path.join(self.training_path(), self.affordances[self.idx_iter] + ".json")
 
     def training_path(self):
-        return os.path.join(self.ui.line_descriptors.text(), self.interactions[self.idx_iter])
+        return os.path.join(self.ui.line_configurations.text(), "descriptor_repository",
+                            self.interactions[self.idx_iter])
+
+    def propagator_file(self):
+        return os.path.join(self.ui.line_results.text(), "propagators", self.scannet_data.scans[self.idx_env],
+                            self.affordances[self.idx_iter], "propagation_rbf.pkl")
+
+    def samples_file(self):
+        path_samples = os.path.join(self.ui.line_results.text(), "samples", self.scannet_data.scans[self.idx_env])
+        npy_samples_file = os.path.join(path_samples, "sample_points.npy")
+        return npy_samples_file
 
     def click_show_samples_on_environment(self):
         old_camera = self.vp.camera
 
-        self.update_vtk(vtk_env=self.vtk_env, vtk_points=self.vtk_pc_tested, vtk_samples=self.sampler.vtk_samples, camera=old_camera)
+        self.update_vtk(vtk_env=self.vtk_env, vtk_points=self.vtk_pc_tested, vtk_samples=self.sampler.vtk_samples,
+                        camera=old_camera)
 
 
 class CtrlPropagatorSampler:
@@ -382,7 +424,7 @@ class CtrlPropagatorSampler:
 
     def angle_with_best_score(self, x, y, z):
         angles = self.pd_best_scores[(self.pd_best_scores['point_x'].round(decimals=5) == round(x, 5)) &
-                            (self.pd_best_scores['point_y'].round(decimals=5) == round(y, 5)) &
-                            (self.pd_best_scores['point_z'].round(decimals=5) == round(z, 5))].angle
+                                     (self.pd_best_scores['point_y'].round(decimals=5) == round(y, 5)) &
+                                     (self.pd_best_scores['point_z'].round(decimals=5) == round(z, 5))].angle
 
         return angles.array[0] if (angles.shape[0] == 1) else -1
