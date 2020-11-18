@@ -40,19 +40,18 @@ class CtrlPropagatorVisualizer:
         self.affordances = []
         self.BATCH_PROPAGATION = 10000
 
-        self.frames_npz_data = None
-        self.frames_nums = None
-        self.jpg_frames_dir = None
-        self.thread = None
+        self.img_width = 224
+        self.img_height = 224
+        self.stride = 10
 
         app = QtWidgets.QApplication(sys.argv)
         MainWindow = QtWidgets.QMainWindow()
 
         self.ui = Ui_MainWindow()
         self.ui.setupUi(MainWindow)
-        self.lbl_results = SequenceImagesWidget(self.ui.centralwidget)
-        #self.lbl_results.setGeometry(QtCore.QRect(870, 180, 224, 224))
-        self.lbl_results.setAutoFillBackground(False)
+        self.ui.lbl_results = SequenceImagesWidget(self.ui.centralwidget)
+        self.ui.lbl_results.setGeometry(QtCore.QRect(860, 180, self.img_width, self.img_height))
+        self.ui.lbl_results.setAutoFillBackground(False)
         self.ui.vtk_widget.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
         self.ui.vtk_interaction.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
 
@@ -276,45 +275,32 @@ class CtrlPropagatorVisualizer:
         self.ui.btn_pause.setEnabled(True)
         self.ui.btn_play.setEnabled(True)
         self.ui.btn_stop.setEnabled(True)
-        img_width = 224
-        img_height = 224
-        stride = 10
         npz_file = os.path.join(self.ui.line_results.text(), "frame_propagation", self.scannet_data.scans[self.idx_env],
                                 self.affordances[self.idx_iter] + "_img_segmentation_w224_x_h224", "scores_1.npz")
-        self.frames_npz_data = np.load(npz_file)
-        self.frames_nums = [int(i[12:i.find("_scores_1.npy")]) for i in self.frames_npz_data.files]
+        frames_npz_data = np.load(npz_file)
+        frames_nums = [int(i[12:i.find("_scores_1.npy")]) for i in frames_npz_data.files]
 
-        self.jpg_frames_dir = os.path.join(self.ui.line_results.text(), "frame_img_samplings",
-                                           self.scannet_data.scans[self.idx_env],
-                                           "w" + str(img_width) + "h" + str(img_height) + "s" + str(stride))
+        jpg_frames_dir = os.path.join(self.ui.line_results.text(), "frame_img_samplings",
+                                      self.scannet_data.scans[self.idx_env],
+                                      "w" + str(self.img_width) + "h" + str(self.img_height) + "s" + str(self.stride))
 
-        jpg_frame_file = os.path.join(self.jpg_frames_dir, "image_frame_" + str(self.frames_nums[0]) + "_input.jpg")
+        jpg_frame_file = os.path.join(jpg_frames_dir, "image_frame_" + str(frames_nums[0]) + "_input.jpg")
         cv_frame = cv2.imread(jpg_frame_file)
 
-        # self.ui.lbl_results.setPixmap(CtrlPropagatorVisualizer.convert_cv_qt(cv_frame, img_width, img_height))
+        self.ui.lbl_results.update_image(cv_frame)
         self.ui.lbl_results.show()
 
     def click_btn_play(self):
-        print("not implemented")
-        # self.thread = VideoThread(self.jpg_frames_dir, self.frames_npz_data, self.frames_nums)
-        # self.thread.change_pixmap_signal.connect(self.update_image)
-        # self.thread.start()
+        npz_file = os.path.join(self.ui.line_results.text(), "frame_propagation", self.scannet_data.scans[self.idx_env],
+                                self.affordances[self.idx_iter] + "_img_segmentation_w224_x_h224", "scores_1.npz")
+        frames_npz_data = np.load(npz_file)
+        frames_nums = [int(i[12:i.find("_scores_1.npy")]) for i in frames_npz_data.files]
 
-    @pyqtSlot(np.ndarray)
-    def update_image(self, cv_img):
-        """Updates the image_label with a new opencv image"""
-        qt_img = self.convert_cv_qt(cv_img, 224, 224)
-        self.ui.lbl_results.setPixmap(qt_img)
-
-    @staticmethod
-    def convert_cv_qt(cv_img, display_width, display_height):
-        """Convert from an opencv image to QPixmap"""
-        rgb_image = cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB)
-        h, w, ch = rgb_image.shape
-        bytes_per_line = ch * w
-        convert_to_qt_format = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format_RGB888)
-        p = convert_to_qt_format.scaled(display_width, display_height, Qt.KeepAspectRatio)
-        return QPixmap.fromImage(p)
+        jpg_frames_dir = os.path.join(self.ui.line_results.text(), "frame_img_samplings",
+                                      self.scannet_data.scans[self.idx_env],
+                                      "w" + str(self.img_width) + "h" + str(self.img_height) + "s" + str(self.stride))
+        self.ui.lbl_results.q_thread.set_sequences_files(npz_file, frames_nums, jpg_frames_dir)
+        self.ui.lbl_results.q_thread.start()
 
     def __iter_meshes_files(self):
         training_path = self.training_path()

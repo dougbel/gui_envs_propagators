@@ -8,9 +8,6 @@
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 
-from qt_ui.video_thread import SequenceImagesWidget
-
-
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
@@ -109,11 +106,11 @@ class Ui_MainWindow(object):
         self.chk_on_tested_points.setChecked(True)
         self.chk_on_tested_points.setAutoRepeatDelay(300)
         self.chk_on_tested_points.setObjectName("chk_on_tested_points")
-        self.lbl_results = SequenceImagesWidget(self.centralwidget)
-        self.lbl_results.setGeometry(QtCore.QRect(870, 180, 224, 224))
+        self.lbl_results = QtWidgets.QLabel(self.centralwidget)
+        self.lbl_results.setGeometry(QtCore.QRect(865, 180, 224, 224))
         self.lbl_results.setAutoFillBackground(False)
-        # self.lbl_results.setStyleSheet("")
-        # self.lbl_results.setText("")
+        self.lbl_results.setStyleSheet("")
+        self.lbl_results.setText("")
         self.lbl_results.setObjectName("lbl_results")
         self.btn_play = QtWidgets.QPushButton(self.centralwidget)
         self.btn_play.setEnabled(False)
