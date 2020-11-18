@@ -218,24 +218,15 @@ class CtrlPropagatorVisualizer:
                 self.ui.chk_on_tested_points.setChecked(True)
                 self.update_vtk(vtk_env=self.vtk_env, camera=old_camera, resetcam=resetcam)
 
-                propagator_file = self.propagator_file()
-                with open(propagator_file, 'rb') as rbf_file:
-                    propagator = pickle.load(rbf_file)
+                npy_samples_scores_file = os.path.join(self.ui.line_results.text(), "samples_propagation",
+                                                       self.scannet_data.scans[self.idx_env],
+                                                       self.affordances[self.idx_iter],
+                                                       "samples_propagated_scores_1.npy")
+                npy_samples_scores = np.load(npy_samples_scores_file)
 
-                npy_samples_file = self.samples_file()
-
-                self.np_pc_tested = np.load(npy_samples_file)
+                self.np_pc_tested = npy_samples_scores[:, 0:3]
                 self.vtk_pc_tested = Points(self.np_pc_tested, r=3, alpha=1, c='blue')
-
-                self.np_scores = np.array([])  # TODO it is already calculated, then use it!!!
-                for j in range(0, self.np_pc_tested.shape[0], self.BATCH_PROPAGATION):
-                    batch = self.np_pc_tested[j:j + self.BATCH_PROPAGATION]
-                    temp = propagator(batch[:, 0], batch[:, 1], batch[:, 2])
-                    self.np_scores = np.concatenate((self.np_scores, temp), axis=0)
-
-                self.np_scores[self.np_scores < 0] = 0
-                self.np_scores[self.np_scores > 1] = 1
-
+                self.np_scores = npy_samples_scores[:, 3]
                 self.vtk_pc_tested.cellColors(self.np_scores, cmap='jet_r', vmin=0, vmax=1)
                 self.vtk_pc_tested.addScalarBar(c='jet_r', nlabels=5, pos=(0.8, 0.25))
 
@@ -291,8 +282,8 @@ class CtrlPropagatorVisualizer:
         self.frames_nums = [int(i[12:i.find("_scores_1.npy")]) for i in self.frames_npz_data.files]
 
         self.jpg_frames_dir = os.path.join(self.ui.line_results.text(), "frame_img_samplings",
-                                      self.scannet_data.scans[self.idx_env],
-                                      "w" + str(img_width) + "h" + str(img_height) + "s" + str(stride))
+                                           self.scannet_data.scans[self.idx_env],
+                                           "w" + str(img_width) + "h" + str(img_height) + "s" + str(stride))
 
         jpg_frame_file = os.path.join(self.jpg_frames_dir, "image_frame_" + str(self.frames_nums[0]) + "_input.jpg")
         cv_frame = cv2.imread(jpg_frame_file)
