@@ -1,5 +1,4 @@
 import gc
-import glob
 import json
 import os
 import pickle
@@ -9,19 +8,23 @@ import re
 from collections import Counter
 from pathlib import Path
 
+import cv2
 import numpy as np
 import open3d as o3d
 import pandas as pd
-import trimesh
 import vtk
 
 from PyQt5 import QtWidgets
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSlot
+from PyQt5.QtGui import QImage
 from PyQt5.QtWidgets import QFileDialog
-from vedo import Plotter, load, Points, Lines, trimesh2vtk, Spheres
-from vedo.utils import flatten
+
+from PyQt5.QtGui import QPixmap
+
+from vedo import Plotter, load, Points, Lines, Spheres
 
 from qt_ui.Ui_propagators_loader import Ui_MainWindow
+from qt_ui.video_thread import VideoThread
 from si.scannet.datascannet import DataScanNet
 from thirdparty.QJsonModel.qjsonmodel import QJsonModel
 
@@ -36,6 +39,11 @@ class CtrlPropagatorVisualizer:
         self.interactions = []
         self.affordances = []
         self.BATCH_PROPAGATION = 10000
+
+        self.frames_npz_data = None
+        self.frames_nums = None
+        self.jpg_frames_dir = None
+        self.thread = None
 
         app = QtWidgets.QApplication(sys.argv)
         MainWindow = QtWidgets.QMainWindow()
@@ -61,6 +69,7 @@ class CtrlPropagatorVisualizer:
         # self.ui.btn_view_interaction.clicked.connect(self.click_view_interaction)
         self.ui.btn_add_sample.clicked.connect(self.click_add_sample_on_environment)
         self.ui.btn_show_samples.clicked.connect(self.click_show_samples_on_environment)
+        self.ui.btn_play.clicked.connect(self.click_btn_play)
 
         # ### check box signal
         self.ui.chk_on_gray_env.stateChanged.connect(self.changed_chk_on_gray_env)
@@ -233,6 +242,7 @@ class CtrlPropagatorVisualizer:
                 self.update_vtk(vtk_env=self.vtk_env, vtk_points=self.vtk_pc_tested, camera=old_camera)
 
                 self.update_data()
+                self.update_segmentation_video()
 
     def update_list_interactions(self, scan=None):
         self.interactions.clear()
@@ -267,6 +277,50 @@ class CtrlPropagatorVisualizer:
             self.ui.tree_propagation.header().resizeSection(0, 200)
 
             self.update_vtk_interaction()
+
+    def update_segmentation_video(self):
+        self.ui.btn_pause.setEnabled(True)
+        self.ui.btn_play.setEnabled(True)
+        self.ui.btn_stop.setEnabled(True)
+        img_width = 224
+        img_height = 224
+        stride = 10
+        npz_file = os.path.join(self.ui.line_results.text(), "frame_propagation", self.scannet_data.scans[self.idx_env],
+                                self.affordances[self.idx_iter] + "_img_segmentation_w224_x_h224", "scores_1.npz")
+        self.frames_npz_data = np.load(npz_file)
+        self.frames_nums = [int(i[12:i.find("_scores_1.npy")]) for i in self.frames_npz_data.files]
+
+        self.jpg_frames_dir = os.path.join(self.ui.line_results.text(), "frame_img_samplings",
+                                      self.scannet_data.scans[self.idx_env],
+                                      "w" + str(img_width) + "h" + str(img_height) + "s" + str(stride))
+
+        jpg_frame_file = os.path.join(self.jpg_frames_dir, "image_frame_" + str(self.frames_nums[0]) + "_input.jpg")
+        cv_frame = cv2.imread(jpg_frame_file)
+
+        self.ui.lbl_results.setPixmap(CtrlPropagatorVisualizer.convert_cv_qt(cv_frame, img_width, img_height))
+        self.ui.lbl_results.show()
+
+    def click_btn_play(self):
+        print("not implemented")
+        # self.thread = VideoThread(self.jpg_frames_dir, self.frames_npz_data, self.frames_nums)
+        # self.thread.change_pixmap_signal.connect(self.update_image)
+        # self.thread.start()
+
+    @pyqtSlot(np.ndarray)
+    def update_image(self, cv_img):
+        """Updates the image_label with a new opencv image"""
+        qt_img = self.convert_cv_qt(cv_img, 224, 224)
+        self.ui.lbl_results.setPixmap(qt_img)
+
+    @staticmethod
+    def convert_cv_qt(cv_img, display_width, display_height):
+        """Convert from an opencv image to QPixmap"""
+        rgb_image = cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB)
+        h, w, ch = rgb_image.shape
+        bytes_per_line = ch * w
+        convert_to_qt_format = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format_RGB888)
+        p = convert_to_qt_format.scaled(display_width, display_height, Qt.KeepAspectRatio)
+        return QPixmap.fromImage(p)
 
     def __iter_meshes_files(self):
         training_path = self.training_path()
@@ -303,7 +357,8 @@ class CtrlPropagatorVisualizer:
         # clearance vectors
         cv_sample_size = self.train_data["trainer"]["cv_sampler"]["sample_clearance_size"]
         cv_pnt_file = os.path.join(training_path, 'UNew_' + aff + '_' + obj_name + '_descriptor_8_clearance_points.pcd')
-        cv_vct_file = os.path.join(training_path, 'UNew_' + aff + '_' + obj_name + '_descriptor_8_clearance_vectors.pcd')
+        cv_vct_file = os.path.join(training_path,
+                                   'UNew_' + aff + '_' + obj_name + '_descriptor_8_clearance_vectors.pcd')
         cv_points = np.asarray(o3d.io.read_point_cloud(cv_pnt_file).points)[0:cv_sample_size]
         cv_vectors = np.asarray(o3d.io.read_point_cloud(cv_vct_file).points)[0:cv_sample_size]
         clearance_vectors = Lines(cv_points, cv_points + cv_vectors, c='yellow', alpha=1).lighting("plastic")
