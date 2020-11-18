@@ -14,7 +14,7 @@ import open3d as o3d
 import pandas as pd
 import vtk
 
-from PyQt5 import QtWidgets
+from PyQt5 import QtWidgets, QtCore
 from PyQt5.QtCore import Qt, pyqtSlot
 from PyQt5.QtGui import QImage
 from PyQt5.QtWidgets import QFileDialog
@@ -24,7 +24,7 @@ from PyQt5.QtGui import QPixmap
 from vedo import Plotter, load, Points, Lines, Spheres
 
 from qt_ui.Ui_propagators_loader import Ui_MainWindow
-from qt_ui.video_thread import VideoThread
+from qt_ui.video_thread import VideoThread, SequenceImagesWidget
 from si.scannet.datascannet import DataScanNet
 from thirdparty.QJsonModel.qjsonmodel import QJsonModel
 
@@ -50,6 +50,9 @@ class CtrlPropagatorVisualizer:
 
         self.ui = Ui_MainWindow()
         self.ui.setupUi(MainWindow)
+        self.lbl_results = SequenceImagesWidget(self.ui.centralwidget)
+        #self.lbl_results.setGeometry(QtCore.QRect(870, 180, 224, 224))
+        self.lbl_results.setAutoFillBackground(False)
         self.ui.vtk_widget.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
         self.ui.vtk_interaction.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
 
@@ -288,7 +291,7 @@ class CtrlPropagatorVisualizer:
         jpg_frame_file = os.path.join(self.jpg_frames_dir, "image_frame_" + str(self.frames_nums[0]) + "_input.jpg")
         cv_frame = cv2.imread(jpg_frame_file)
 
-        self.ui.lbl_results.setPixmap(CtrlPropagatorVisualizer.convert_cv_qt(cv_frame, img_width, img_height))
+        # self.ui.lbl_results.setPixmap(CtrlPropagatorVisualizer.convert_cv_qt(cv_frame, img_width, img_height))
         self.ui.lbl_results.show()
 
     def click_btn_play(self):
