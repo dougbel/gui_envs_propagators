@@ -49,6 +49,7 @@ class CtrlPropagatorVisualizer:
 
         self.ui = Ui_MainWindow()
         self.ui.setupUi(MainWindow)
+        self.ui.lbl_results.hide()
         self.ui.lbl_results = SequenceImagesWidget(self.ui.centralwidget)
         self.ui.lbl_results.setGeometry(QtCore.QRect(860, 180, self.img_width, self.img_height))
         self.ui.lbl_results.setAutoFillBackground(False)
@@ -72,6 +73,8 @@ class CtrlPropagatorVisualizer:
         self.ui.btn_add_sample.clicked.connect(self.click_add_sample_on_environment)
         self.ui.btn_show_samples.clicked.connect(self.click_show_samples_on_environment)
         self.ui.btn_play.clicked.connect(self.click_btn_play)
+        self.ui.btn_pause.clicked.connect(self.click_btn_pause)
+        self.ui.btn_stop.clicked.connect(self.click_btn_stop)
 
         # ### check box signal
         self.ui.chk_on_gray_env.stateChanged.connect(self.changed_chk_on_gray_env)
@@ -272,9 +275,7 @@ class CtrlPropagatorVisualizer:
             self.update_vtk_interaction()
 
     def update_segmentation_video(self):
-        self.ui.btn_pause.setEnabled(True)
         self.ui.btn_play.setEnabled(True)
-        self.ui.btn_stop.setEnabled(True)
         npz_file = os.path.join(self.ui.line_results.text(), "frame_propagation", self.scannet_data.scans[self.idx_env],
                                 self.affordances[self.idx_iter] + "_img_segmentation_w224_x_h224", "scores_1.npz")
         frames_npz_data = np.load(npz_file)
@@ -288,19 +289,27 @@ class CtrlPropagatorVisualizer:
         cv_frame = cv2.imread(jpg_frame_file)
 
         self.ui.lbl_results.update_image(cv_frame)
+        self.ui.lbl_results.q_thread.set_sequences_files(frames_npz_data, frames_nums, jpg_frames_dir)
         self.ui.lbl_results.show()
 
     def click_btn_play(self):
-        npz_file = os.path.join(self.ui.line_results.text(), "frame_propagation", self.scannet_data.scans[self.idx_env],
-                                self.affordances[self.idx_iter] + "_img_segmentation_w224_x_h224", "scores_1.npz")
-        frames_npz_data = np.load(npz_file)
-        frames_nums = [int(i[12:i.find("_scores_1.npy")]) for i in frames_npz_data.files]
-
-        jpg_frames_dir = os.path.join(self.ui.line_results.text(), "frame_img_samplings",
-                                      self.scannet_data.scans[self.idx_env],
-                                      "w" + str(self.img_width) + "h" + str(self.img_height) + "s" + str(self.stride))
-        self.ui.lbl_results.q_thread.set_sequences_files(npz_file, frames_nums, jpg_frames_dir)
         self.ui.lbl_results.q_thread.start()
+        self.ui.btn_play.setEnabled(False)
+        self.ui.btn_pause.setEnabled(True)
+        self.ui.btn_stop.setEnabled(True)
+
+    def click_btn_pause(self):
+        self.ui.lbl_results.q_thread.pause()
+        self.ui.btn_play.setEnabled(True)
+        self.ui.btn_pause.setEnabled(False)
+        self.ui.btn_stop.setEnabled(True)
+
+    def click_btn_stop(self):
+        self.ui.lbl_results.q_thread.pause()
+        self.update_segmentation_video()
+        self.ui.btn_play.setEnabled(True)
+        self.ui.btn_pause.setEnabled(False)
+        self.ui.btn_stop.setEnabled(False)
 
     def __iter_meshes_files(self):
         training_path = self.training_path()
