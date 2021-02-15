@@ -41,27 +41,27 @@ class VideoThread(QThread):
         self._run_flag = False
         self.frames_npz_data = None
         self.frames_nums = None
-        self.jpg_frames_dir = None
+        self.png_frames_dir = None
         self.current_pos = 0
 
-    def set_sequences_files(self, frames_npz_data, frames_nums, jpg_frames_dir):
+    def set_sequences_files(self, frames_npz_data, frames_nums, png_frames_dir):
         self.frames_npz_data = frames_npz_data
         self.frames_nums = frames_nums
-        self.jpg_frames_dir = jpg_frames_dir
+        self.png_frames_dir = png_frames_dir
         self.current_pos = 0
 
     def run(self):
         self._run_flag = True
         while self._run_flag and self.frames_npz_data is not None:
             str_pos = str(self.frames_nums[self.current_pos])
-            jpg_frame_file = os.path.join(self.jpg_frames_dir, "image_frame_" + str_pos + "_input.jpg")
-            cv_frame = cv2.imread(jpg_frame_file)
+            png_frame_file = os.path.join(self.png_frames_dir, "image_frame_" + str_pos + "_input.png")
+            cv_frame = cv2.imread(png_frame_file)
             h, w, c = cv_frame.shape
             npy_frame_data = self.frames_npz_data["image_frame_" + str_pos + "_scores_1.npy"]
             npy_frame_data = npy_frame_data * 255
             img_scores_255 = npy_frame_data.astype(np.uint8)
             red_mask = np.zeros((h, w, 3), dtype=np.uint8)
-            red_mask[:, :, 1] = img_scores_255
+            red_mask[:, :, 0] = img_scores_255
             alpha = 0.55
             beta = (1.0 - alpha)
             img_bgr_masked = cv2.addWeighted(cv_frame, alpha, red_mask, beta, 0.0)
@@ -80,4 +80,4 @@ class VideoThread(QThread):
         self.wait()
         self.frames_npz_data = None
         self.frames_nums = None
-        self.jpg_frames_dir = None
+        self.png_frames_dir = None

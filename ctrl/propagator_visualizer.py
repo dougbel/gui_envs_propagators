@@ -55,6 +55,7 @@ class CtrlPropagatorVisualizer:
         self.ui.lbl_results.setAutoFillBackground(False)
         self.ui.vtk_widget.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
         self.ui.vtk_interaction.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
+        self.available_interactions = []
 
         self.vp = Plotter(qtWidget=self.ui.vtk_widget, bg="white")
         self.vp.show([], axes=0)
@@ -69,7 +70,6 @@ class CtrlPropagatorVisualizer:
             lambda: self.click_set_dir(MainWindow, self.ui.line_results, "results"))
         self.ui.btn_configurations.clicked.connect(
             lambda: self.click_set_dir(MainWindow, self.ui.line_configurations, "configurations"))
-        # self.ui.btn_view_interaction.clicked.connect(self.click_view_interaction)
         self.ui.btn_add_sample.clicked.connect(self.click_add_sample_on_environment)
         self.ui.btn_show_samples.clicked.connect(self.click_show_samples_on_environment)
         self.ui.btn_play.clicked.connect(self.click_btn_play)
@@ -193,8 +193,11 @@ class CtrlPropagatorVisualizer:
 
             for i in range(self.ui.l_interactions.count()):
                 affordance = self.affordances[i]
-                if affordance in tested and affordance in calc_prop and affordance in propagated:
+                ready = affordance in tested and affordance in calc_prop and affordance in propagated
+                self.available_interactions.append(ready)
+                if ready:
                     self.ui.l_interactions.item(i).setForeground(Qt.black)
+
                 else:
                     self.ui.l_interactions.item(i).setForeground(Qt.red)
 
@@ -223,22 +226,25 @@ class CtrlPropagatorVisualizer:
                 self.ui.chk_on_tested_points.setChecked(True)
                 self.update_vtk(vtk_env=self.vtk_env, camera=old_camera, resetcam=resetcam)
 
-                npy_samples_scores_file = os.path.join(self.ui.line_results.text(), "samples_propagation",
-                                                       self.scannet_data.scans[self.idx_env],
-                                                       self.affordances[self.idx_iter],
-                                                       "samples_propagated_scores_1.npy")
-                npy_samples_scores = np.load(npy_samples_scores_file)
+                availible = self.available_interactions[self.idx_iter]
 
-                self.np_pc_tested = npy_samples_scores[:, 0:3]
-                self.vtk_pc_tested = Points(self.np_pc_tested, r=3, alpha=1, c='blue')
-                self.np_scores = npy_samples_scores[:, 3]
-                self.vtk_pc_tested.cellColors(self.np_scores, cmap='jet_r', vmin=0, vmax=1)
-                self.vtk_pc_tested.addScalarBar(c='jet_r', nlabels=5, pos=(0.8, 0.25))
+                if availible:
+                    npy_samples_scores_file = os.path.join(self.ui.line_results.text(), "samples_propagation",
+                                                           self.scannet_data.scans[self.idx_env],
+                                                           self.affordances[self.idx_iter],
+                                                           "samples_propagated_scores_1.npy")
+                    npy_samples_scores = np.load(npy_samples_scores_file)
 
-                self.update_vtk(vtk_env=self.vtk_env, vtk_points=self.vtk_pc_tested, camera=old_camera)
+                    self.np_pc_tested = npy_samples_scores[:, 0:3]
+                    self.vtk_pc_tested = Points(self.np_pc_tested, r=3, alpha=1, c='blue')
+                    self.np_scores = npy_samples_scores[:, 3]
+                    self.vtk_pc_tested.cellColors(self.np_scores, cmap='jet_r', vmin=0, vmax=1)
+                    self.vtk_pc_tested.addScalarBar(c='jet_r', nlabels=5, pos=(0.8, 0.25))
 
-                self.update_data()
-                self.update_segmentation_video()
+                    self.update_vtk(vtk_env=self.vtk_env, vtk_points=self.vtk_pc_tested, camera=old_camera)
+
+                    self.update_data()
+                    self.update_segmentation_video()
 
     def update_list_interactions(self, scan=None):
         self.interactions.clear()
@@ -285,8 +291,8 @@ class CtrlPropagatorVisualizer:
                                       self.scannet_data.scans[self.idx_env],
                                       "w" + str(self.img_width) + "h" + str(self.img_height) + "s" + str(self.stride))
 
-        jpg_frame_file = os.path.join(jpg_frames_dir, "image_frame_" + str(frames_nums[0]) + "_input.jpg")
-        cv_frame = cv2.imread(jpg_frame_file)
+        png_frame_file = os.path.join(jpg_frames_dir, "image_frame_" + str(frames_nums[0]) + "_input.png")
+        cv_frame = cv2.imread(png_frame_file)
 
         self.ui.lbl_results.update_image(cv_frame)
         self.ui.lbl_results.q_thread.set_sequences_files(frames_npz_data, frames_nums, jpg_frames_dir)
