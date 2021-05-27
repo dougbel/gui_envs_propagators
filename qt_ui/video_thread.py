@@ -1,10 +1,11 @@
 import os
 import cv2
 import numpy as np
+from PyQt5 import QtGui
 from PyQt5.QtCore import QThread, pyqtSignal, pyqtSlot, Qt
 from PyQt5.QtGui import QPixmap, QColor
 from PyQt5.QtWidgets import QWidget, QLabel, QVBoxLayout
-from pydev_ipython.qt import QtGui
+# from pydev_ipython.qt import QtGui
 
 
 class SequenceImagesWidget(QWidget):
